@@ -1,0 +1,11 @@
+[package]
+name = "hel-time"
+authors = ["Hellaeh <me@hellaeh.com>"]
+version = "0.1.0"
+edition = "2021"
+description = "Simple util crate to deal with time"
+license = "MIT"
+repository = "https://github.com/Hellaeh/time.git"
+keywords = ["time"]
+documentation = "https://docs.rs/hel-time"
+readme = "README.md"
