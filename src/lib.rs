@@ -1,5 +1,4 @@
 //! A simple more of a util crate that deals with time
-use std::fmt::Write;
 use std::time::SystemTime;
 
 // seconds per ...
@@ -33,6 +32,14 @@ const ANCHOR_YEAR: u64 = 2000;
 // March is 1st month here
 const DM: [u64; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
 
+// Took inspiration from `chrono` crate
+macro_rules! write_hundreds {
+	($w: ident, $n: expr) => {
+		$w.push((b'0' + ($n) as u8 / 10) as char);
+		$w.push((b'0' + ($n) as u8 % 10) as char);
+	};
+}
+
 /// Returns a [`String`] formatted as a ISO8601 in UTC
 ///
 /// # Example
@@ -40,9 +47,9 @@ const DM: [u64; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
 /// use hel_time::iso8601utc;
 ///
 /// let datetime: String = iso8601utc();
-///	println!("{datetime}");
+/// println!("{datetime}");
 /// ```
-// Inspiration https://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c?h=v0.9.15
+// Inspiration https://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c
 #[inline]
 pub fn iso8601utc() -> String {
 	let Ok(since_epoch) = SystemTime::now().duration_since(ANCHOR) else {
@@ -57,12 +64,10 @@ pub fn iso8601utc() -> String {
 	let leaps = rem_days / DP4Y;
 	rem_days -= leaps * DP4Y;
 
-	let years = rem_days / 365;
+	let mut years = rem_days / 365;
 	rem_days -= years * 365;
 
-	let year = ANCHOR_YEAR + years + leaps * 4;
-
-	let mut month = 3;
+	let mut month = 0u8;
 	for d in DM {
 		if d > rem_days {
 			break;
@@ -72,29 +77,48 @@ pub fn iso8601utc() -> String {
 		month += 1;
 	}
 
-	month %= 12;
+	if month >= 10 {
+		month -= 12;
+		years += 1;
+	}
 
+	let year = ANCHOR_YEAR + years + leaps * 4;
+	let month = month + 3;
 	let day = rem_days + 1;
 
 	let hour = rem_secs / SPH;
-	rem_secs -= hour * SPH;
-
-	let minute = rem_secs / SPM;
-	rem_secs -= minute * SPM;
-
-	let second = rem_secs;
+	let minute = rem_secs / SPM % SPM;
+	let second = rem_secs % 60;
 
 	let millis = since_epoch.subsec_millis();
 
+	// format is slower by 5x on my machine
+	// format!("{year}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
+
 	let mut res = String::with_capacity(25);
 
-	unsafe {
-		write!(
-			res,
-			"{year}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z",
-		)
-		.unwrap_unchecked();
-	}
+	write_hundreds!(res, year / 100);
+	write_hundreds!(res, year % 100);
+	res.push('-');
+
+	write_hundreds!(res, month);
+	res.push('-');
+
+	write_hundreds!(res, day);
+	res.push('T');
+
+	write_hundreds!(res, hour);
+	res.push(':');
+
+	write_hundreds!(res, minute);
+	res.push(':');
+
+	write_hundreds!(res, second);
+	res.push('.');
+
+	res.push((b'0' + (millis / 100) as u8) as char);
+	write_hundreds!(res, millis / 10);
+	res.push('Z');
 
 	res
 }
