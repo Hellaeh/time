@@ -1,5 +1,5 @@
 //! A simple more of a util crate that deals with time
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 // seconds per ...
 const SPM: u64 = 60;
@@ -9,21 +9,25 @@ const SPD: u64 = SPH * 24;
 // we skip 100 and 400
 const DP4Y: u64 = 365 * 4 + 1;
 
+#[cfg(target_os = "windows")]
+type Local = u64;
+#[cfg(not(target_os = "windows"))]
+type Local = u128;
+
 // Windows increments time by 100ns intervals
 #[cfg(target_os = "windows")]
-const MULTIPLIER: u64 = 10_000_000;
-
+const MULTIPLIER: Local = 10_000_000;
 #[cfg(not(target_os = "windows"))]
-const MULTIPLIER: u64 = 1_000_000_000;
+const MULTIPLIER: Local = 1_000_000_000;
 
 // 01 March 2000
 const ANCHOR: SystemTime = unsafe {
 	// TODO should handle this better ?
-	// if there's any changes in the future transmute should catch it before compilation
+	// if there's any changes in the future, transmute should catch it before compilation
 	std::mem::transmute(
-		std::mem::transmute::<SystemTime, u64>(SystemTime::UNIX_EPOCH)
+		std::mem::transmute::<SystemTime, Local>(SystemTime::UNIX_EPOCH)
 			+ 946684800 * MULTIPLIER
-			+ SPD * 60 * MULTIPLIER,
+			+ SPD as Local * 60 * MULTIPLIER,
 	)
 };
 
@@ -35,28 +39,14 @@ const DM: [u64; 12] = [31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, 29];
 // Took inspiration from `chrono` crate
 macro_rules! write_hundreds {
 	($w: ident, $n: expr) => {
-		$w.push((b'0' + ($n) as u8 / 10) as char);
-		$w.push((b'0' + ($n) as u8 % 10) as char);
+		$w.push(b'0' + ($n) as u8 / 10);
+		$w.push(b'0' + ($n) as u8 % 10);
 	};
 }
 
-/// Returns a [`String`] formatted as a ISO8601 in UTC
-///
-/// # Example
-/// ```
-/// use hel_time::iso8601utc;
-///
-/// let datetime: String = iso8601utc();
-/// println!("{datetime}");
-/// ```
-// Inspiration https://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c
 #[inline]
-pub fn iso8601utc() -> String {
-	let Ok(since_epoch) = SystemTime::now().duration_since(ANCHOR) else {
-		return String::new();
-	};
-
-	let mut rem_secs = since_epoch.as_secs();
+fn iso8601utc_from_ts(since_anchor: Duration) -> String {
+	let mut rem_secs = since_anchor.as_secs();
 
 	let mut rem_days = rem_secs / SPD;
 	rem_secs -= rem_days * SPD;
@@ -90,35 +80,55 @@ pub fn iso8601utc() -> String {
 	let minute = rem_secs / SPM % SPM;
 	let second = rem_secs % 60;
 
-	let millis = since_epoch.subsec_millis();
+	let millis = since_anchor.subsec_millis();
 
-	// format is slower by 5x on my machine
+	// format is slower by x5 on my machine
 	// format!("{year}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{millis:03}Z")
 
-	let mut res = String::with_capacity(25);
+	let mut res: Vec<u8> = Vec::with_capacity(25);
 
-	write_hundreds!(res, year / 100);
+	write_hundreds!(res, 20);
 	write_hundreds!(res, year % 100);
-	res.push('-');
+	res.push(b'-');
 
 	write_hundreds!(res, month);
-	res.push('-');
+	res.push(b'-');
 
 	write_hundreds!(res, day);
-	res.push('T');
+	res.push(b'T');
 
 	write_hundreds!(res, hour);
-	res.push(':');
+	res.push(b':');
 
 	write_hundreds!(res, minute);
-	res.push(':');
+	res.push(b':');
 
 	write_hundreds!(res, second);
-	res.push('.');
+	res.push(b'.');
 
-	res.push((b'0' + (millis / 100) as u8) as char);
+	res.push(b'0' + (millis / 100) as u8);
 	write_hundreds!(res, millis / 10);
-	res.push('Z');
+	res.push(b'Z');
 
-	res
+	unsafe { String::from_utf8_unchecked(res) }
 }
+
+/// Returns a [`String`] formatted as a ISO8601 in UTC
+///
+/// # Example
+/// ```
+/// use hel_time::iso8601utc;
+///
+/// let datetime: String = iso8601utc();
+/// println!("{datetime}");
+/// ```
+// Inspiration https://git.musl-libc.org/cgit/musl/tree/src/time/__secs_to_tm.c
+#[inline]
+pub fn iso8601utc() -> String {
+	let since_anchor = SystemTime::now().duration_since(ANCHOR).unwrap_or_default();
+
+	iso8601utc_from_ts(since_anchor)
+}
+
+#[cfg(test)]
+mod tests;
