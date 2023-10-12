@@ -9,30 +9,34 @@ impl ISO8601UTC {
 		Self(DateTime::utc())
 	}
 
+	/// Will format self into `yyyy-MM-ddTHH:mm:ss.fffZ` string
+	/// Is not accepting any format options
 	#[inline]
-	fn fmt(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
-		write_hundreds!(f, 20);
+	pub fn fmt(&self, f: &mut impl std::fmt::Write) -> std::fmt::Result {
+		use crate::utils::Helper;
+
+		write_hundreds!(f, self.0.year / 100);
 		write_hundreds!(f, self.0.year % 100);
-		f.write_char('-')?;
+		f.write_u8(b'-')?;
 
 		write_hundreds!(f, self.0.month);
-		f.write_char('-')?;
+		f.write_u8(b'-')?;
 
 		write_hundreds!(f, self.0.day);
-		f.write_char('T')?;
+		f.write_u8(b'T')?;
 
 		write_hundreds!(f, self.0.hour);
-		f.write_char(':')?;
+		f.write_u8(b':')?;
 
 		write_hundreds!(f, self.0.minute);
-		f.write_char(':')?;
+		f.write_u8(b':')?;
 
 		write_hundreds!(f, self.0.second);
-		f.write_char('.')?;
+		f.write_u8(b'.')?;
 
-		f.write_char((b'0' + (self.0.ms / 100) as u8) as char)?;
+		f.write_u8(b'0' + (self.0.ms / 100) as u8)?;
 		write_hundreds!(f, self.0.ms % 100);
-		f.write_char('Z')
+		f.write_u8(b'Z')
 	}
 
 	#[inline]
