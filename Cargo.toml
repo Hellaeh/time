@@ -1,7 +1,7 @@
 [package]
 name = "hel-time"
 authors = ["Hellaeh <me@hellaeh.com>"]
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Simple util crate to deal with time"
 license = "MIT"
